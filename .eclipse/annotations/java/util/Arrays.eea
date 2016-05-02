@@ -1,0 +1,4 @@
+class java/util/Arrays
+copyOf
+ ([BI)[B
+ ([1BI)[1B

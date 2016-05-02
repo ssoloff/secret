@@ -1,0 +1,21 @@
+plugins {
+  id 'groovy'
+}
+
+group = 'io.github.ssoloff'
+version = '0.1.0'
+sourceCompatibility = '1.8'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile(
+    [group: 'org.eclipse.jdt', name: 'org.eclipse.jdt.annotation', version: '2.0.0']
+  )
+
+  testCompile(
+    [group: 'org.spockframework', name: 'spock-core', version: '1.0-groovy-2.4']
+  )
+}
