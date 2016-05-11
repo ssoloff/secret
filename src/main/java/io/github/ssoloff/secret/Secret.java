@@ -21,6 +21,7 @@
  */
 package io.github.ssoloff.secret;
 
+import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -29,10 +30,15 @@ import java.util.function.Consumer;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.security.auth.Destroyable;
 
 /**
  * A container for a value that must be kept secret and only disclosed for as
  * short of a time as possible.
+ *
+ * <p>
+ * This class is not thread safe.
+ * </p>
  */
 public final class Secret implements AutoCloseable {
     private static final String ALGORITHM = "AES";
@@ -55,10 +61,9 @@ public final class Secret implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (!key.isDestroyed()) {
+        if (!key.isDestroyed() && isDestroyable(key)) {
             key.destroy();
         }
-
         scrub(ciphertext);
     }
 
@@ -104,6 +109,16 @@ public final class Secret implements AutoCloseable {
         return keyGenerator.generateKey();
     }
 
+    // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
+    private static boolean isDestroyable(final Destroyable destroyable) {
+        try {
+            final Method destroyMethod = destroyable.getClass().getMethod("destroy");
+            return !destroyMethod.isDefault();
+        } catch (final NoSuchMethodException e) {
+            throw new AssertionError("should never happen", e);
+        }
+    }
+
     private static void scrub(final byte[] bytes) {
         Arrays.fill(bytes, (byte) 0);
     }
@@ -116,7 +131,8 @@ public final class Secret implements AutoCloseable {
      *            The consumer to receive the plaintext secret value.
      *
      * @throws GeneralSecurityException
-     *             If an error occurs decrypting the secret.
+     *             If an error occurs decrypting the secret or the secret has
+     *             been closed.
      */
     public void use(final Consumer<byte[]> consumer) throws GeneralSecurityException {
         final byte[] plaintext = decrypt(key, ciphertext);

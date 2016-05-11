@@ -21,10 +21,27 @@
  */
 package io.github.ssoloff.secret
 
+import java.security.GeneralSecurityException
 import java.util.function.Consumer
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.Title
+
+@Subject(Secret)
+@Title('Unit tests for Secret#close')
+class Secret_CloseSpec extends Specification {
+    def 'when closed it should not throw an exception'() {
+        given: 'a closed secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        secret.close()
+
+        when: 'the secret is closed again'
+        secret.close()
+
+        then: 'it should not throw an exception'
+        noExceptionThrown()
+    }
+}
 
 @Subject(Secret)
 @Title('Unit tests for Secret#use')
@@ -54,5 +71,17 @@ class Secret_UseSpec extends Specification {
         consumer.accept(_) >> { plaintext ->
             plaintext == [0, 0, 0, 0]
         }
+    }
+
+    def 'when closed it should throw an exception'() {
+        given: 'a closed secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        secret.close()
+
+        when: 'the secret is used'
+        secret.use(Stub(Consumer))
+
+        then: 'it should throw an exception'
+        thrown(GeneralSecurityException)
     }
 }
