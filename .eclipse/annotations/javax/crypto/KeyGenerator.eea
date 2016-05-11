@@ -1,0 +1,4 @@
+class javax/crypto/KeyGenerator
+generateKey
+ ()Ljavax/crypto/SecretKey;
+ ()L1javax/crypto/SecretKey;
