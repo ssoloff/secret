@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.security.auth.DestroyFailedException;
 import javax.security.auth.Destroyable;
 
 /**
@@ -61,9 +62,7 @@ public final class Secret implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (!key.isDestroyed() && isDestroyable(key)) {
-            key.destroy();
-        }
+        scrub(key);
         scrub(ciphertext);
     }
 
@@ -121,6 +120,12 @@ public final class Secret implements AutoCloseable {
 
     private static void scrub(final byte[] bytes) {
         Arrays.fill(bytes, (byte) 0);
+    }
+
+    private static void scrub(final SecretKey key) throws DestroyFailedException {
+        if (!key.isDestroyed() && isDestroyable(key)) {
+            key.destroy();
+        }
     }
 
     /**
