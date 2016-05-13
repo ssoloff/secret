@@ -23,7 +23,6 @@ package io.github.ssoloff.secret;
 
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
@@ -53,24 +52,27 @@ public final class Secret implements AutoCloseable {
         this.key = key;
     }
 
-    private static byte[] cipher(final int opmode, final SecretKey key, final byte[] input)
-            throws GeneralSecurityException {
-        final Cipher cipher = Cipher.getInstance(ALGORITHM);
-        cipher.init(opmode, key);
-        return cipher.doFinal(input);
+    private static byte[] cipher(final int opmode, final SecretKey key, final byte[] input) throws SecretException {
+        try {
+            final Cipher cipher = Cipher.getInstance(ALGORITHM);
+            cipher.init(opmode, key);
+            return cipher.doFinal(input);
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("failed to apply cipher", e);
+        }
     }
 
     @Override
     public void close() throws Exception {
-        scrub(key);
         scrub(ciphertext);
+        scrub(key);
     }
 
-    private static byte[] decrypt(final SecretKey key, final byte[] ciphertext) throws GeneralSecurityException {
+    private static byte[] decrypt(final SecretKey key, final byte[] ciphertext) throws SecretException {
         return cipher(Cipher.DECRYPT_MODE, key, ciphertext);
     }
 
-    private static byte[] encrypt(final SecretKey key, final byte[] plaintext) throws GeneralSecurityException {
+    private static byte[] encrypt(final SecretKey key, final byte[] plaintext) throws SecretException {
         return cipher(Cipher.ENCRYPT_MODE, key, plaintext);
     }
 
@@ -93,19 +95,23 @@ public final class Secret implements AutoCloseable {
      *
      * @return A new instance of the {@code Secret} class.
      *
-     * @throws GeneralSecurityException
+     * @throws SecretException
      *             If an error occurs creating the secret.
      */
-    public static Secret fromPlaintext(final byte[] plaintext) throws GeneralSecurityException {
+    public static Secret fromPlaintext(final byte[] plaintext) throws SecretException {
         final SecretKey key = generateSecretKey();
         final byte[] ciphertext = encrypt(key, plaintext);
         return new Secret(key, ciphertext);
     }
 
-    private static SecretKey generateSecretKey() throws NoSuchAlgorithmException {
-        final KeyGenerator keyGenerator = KeyGenerator.getInstance(ALGORITHM);
-        keyGenerator.init(ALGORITHM_KEY_SIZE_IN_BITS);
-        return keyGenerator.generateKey();
+    private static SecretKey generateSecretKey() throws SecretException {
+        try {
+            final KeyGenerator keyGenerator = KeyGenerator.getInstance(ALGORITHM);
+            keyGenerator.init(ALGORITHM_KEY_SIZE_IN_BITS);
+            return keyGenerator.generateKey();
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("failed to generate secret key", e);
+        }
     }
 
     // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
@@ -135,11 +141,11 @@ public final class Secret implements AutoCloseable {
      * @param consumer
      *            The consumer to receive the plaintext secret value.
      *
-     * @throws GeneralSecurityException
+     * @throws SecretException
      *             If an error occurs decrypting the secret or the secret has
      *             been closed.
      */
-    public void use(final Consumer<byte[]> consumer) throws GeneralSecurityException {
+    public void use(final Consumer<byte[]> consumer) throws SecretException {
         final byte[] plaintext = decrypt(key, ciphertext);
         try {
             consumer.accept(plaintext);

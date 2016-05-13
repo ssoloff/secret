@@ -21,7 +21,6 @@
  */
 package io.github.ssoloff.secret
 
-import java.security.GeneralSecurityException
 import java.util.function.Consumer
 import spock.lang.Specification
 import spock.lang.Subject
@@ -82,6 +81,6 @@ class Secret_UseSpec extends Specification {
         secret.use(Stub(Consumer))
 
         then: 'it should throw an exception'
-        thrown(GeneralSecurityException)
+        thrown(SecretException)
     }
 }
