@@ -76,11 +76,6 @@ public final class Secret implements AutoCloseable {
         return cipher(Cipher.ENCRYPT_MODE, key, plaintext);
     }
 
-    @Override
-    protected void finalize() throws Exception {
-        close();
-    }
-
     /**
      * Creates a new instance of the {@code Secret} class from the specified
      * plaintext value.
