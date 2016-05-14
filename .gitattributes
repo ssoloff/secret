@@ -1,5 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Allow gradle.bat to retain CRLF
+# Allow gradlew.bat to retain CRLF
 gradlew.bat text eol=crlf
