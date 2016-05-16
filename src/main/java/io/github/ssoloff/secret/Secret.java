@@ -24,6 +24,8 @@ package io.github.ssoloff.secret;
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import javax.crypto.Cipher;
@@ -31,6 +33,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.security.auth.DestroyFailedException;
 import javax.security.auth.Destroyable;
+
+import org.eclipse.jdt.annotation.Nullable;
 
 /**
  * A container for a value that must be kept secret and only disclosed for as
@@ -41,20 +45,28 @@ import javax.security.auth.Destroyable;
  * </p>
  */
 public final class Secret implements AutoCloseable {
-    private static final String ALGORITHM = "AES";
-    private static final int ALGORITHM_KEY_SIZE_IN_BITS = 128;
+    private static final String DEFAULT_CIPHER_ALGORITHM = "AES";
+    private static final int DEFAULT_CIPHER_KEY_SIZE_IN_BITS = 128;
 
+    private final Cipher cipher;
     private final byte[] ciphertext;
     private final SecretKey key;
 
-    private Secret(final SecretKey key, final byte[] ciphertext) {
+    private Secret(
+            final Cipher cipher,
+            final SecretKey key,
+            final byte[] ciphertext) {
+        this.cipher = cipher;
         this.ciphertext = ciphertext;
         this.key = key;
     }
 
-    private static byte[] cipher(final int opmode, final SecretKey key, final byte[] input) throws SecretException {
+    private static byte[] cipher(
+            final Cipher cipher,
+            final int opmode,
+            final SecretKey key,
+            final byte[] input) throws SecretException {
         try {
-            final Cipher cipher = Cipher.getInstance(ALGORITHM);
             cipher.init(opmode, key);
             return cipher.doFinal(input);
         } catch (final GeneralSecurityException e) {
@@ -68,17 +80,48 @@ public final class Secret implements AutoCloseable {
         scrub(key);
     }
 
-    private static byte[] decrypt(final SecretKey key, final byte[] ciphertext) throws SecretException {
-        return cipher(Cipher.DECRYPT_MODE, key, ciphertext);
+    private static byte[] decrypt(
+            final Cipher cipher,
+            final SecretKey key,
+            final byte[] ciphertext) throws SecretException {
+        return cipher(cipher, Cipher.DECRYPT_MODE, key, ciphertext);
     }
 
-    private static byte[] encrypt(final SecretKey key, final byte[] plaintext) throws SecretException {
-        return cipher(Cipher.ENCRYPT_MODE, key, plaintext);
+    private static byte[] encrypt(
+            final Cipher cipher,
+            final SecretKey key,
+            final byte[] plaintext) throws SecretException {
+        return cipher(cipher, Cipher.ENCRYPT_MODE, key, plaintext);
+    }
+
+    @Override
+    public boolean equals(final @Nullable Object obj) {
+        if (obj == this) {
+            return true;
+        } else if (!(obj instanceof Secret)) {
+            return false;
+        }
+
+        final Secret other = (Secret) obj;
+        final AtomicBoolean equals = new AtomicBoolean(false);
+        try {
+            use(plaintext -> {
+                try {
+                    other.use(otherPlaintext -> equals.set(Arrays.equals(plaintext, otherPlaintext)));
+                } catch (final SecretException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (final SecretException e) {
+            throw new RuntimeException(e);
+        }
+        return equals.get();
     }
 
     /**
      * Creates a new instance of the {@code Secret} class from the specified
-     * plaintext value.
+     * plaintext value using the AES cipher and a 128-bit key to generate the
+     * ciphertext.
      *
      * <p>
      * The plaintext value is not modified by this method and should be scrubbed
@@ -94,19 +137,69 @@ public final class Secret implements AutoCloseable {
      *             If an error occurs creating the secret.
      */
     public static Secret fromPlaintext(final byte[] plaintext) throws SecretException {
-        final SecretKey key = generateSecretKey();
-        final byte[] ciphertext = encrypt(key, plaintext);
-        return new Secret(key, ciphertext);
+        final Cipher cipher = getDefaultCipher();
+        final SecretKey key = generateSecretKeyForDefaultCipher();
+        return fromPlaintext(plaintext, cipher, key);
     }
 
-    private static SecretKey generateSecretKey() throws SecretException {
+    /**
+     * Creates a new instance of the {@code Secret} class from the specified
+     * plaintext value using the specified cipher and key to generate the
+     * ciphertext.
+     *
+     * <p>
+     * The plaintext value is not modified by this method and should be scrubbed
+     * by the caller as soon as possible if it is no longer needed.
+     * </p>
+     *
+     * <p>
+     * This method takes ownership of the specified key and will ensure it is
+     * destroyed when the secret is closed.
+     * </p>
+     *
+     * @param plaintext
+     *            The plaintext value to be kept secret.
+     *
+     * @return A new instance of the {@code Secret} class.
+     *
+     * @throws SecretException
+     *             If an error occurs creating the secret.
+     */
+    public static Secret fromPlaintext(
+            final byte[] plaintext,
+            final Cipher cipher,
+            final SecretKey key) throws SecretException {
+        final byte[] ciphertext = encrypt(cipher, key, plaintext);
+        return new Secret(cipher, key, ciphertext);
+    }
+
+    private static SecretKey generateSecretKeyForDefaultCipher() throws SecretException {
         try {
-            final KeyGenerator keyGenerator = KeyGenerator.getInstance(ALGORITHM);
-            keyGenerator.init(ALGORITHM_KEY_SIZE_IN_BITS);
+            final KeyGenerator keyGenerator = KeyGenerator.getInstance(DEFAULT_CIPHER_ALGORITHM);
+            keyGenerator.init(DEFAULT_CIPHER_KEY_SIZE_IN_BITS);
             return keyGenerator.generateKey();
         } catch (final GeneralSecurityException e) {
             throw new SecretException("failed to generate secret key", e);
         }
+    }
+
+    private static Cipher getDefaultCipher() throws SecretException {
+        try {
+            return Cipher.getInstance(DEFAULT_CIPHER_ALGORITHM);
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("", e);
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        final AtomicInteger hashCode = new AtomicInteger();
+        try {
+            use(plaintext -> hashCode.set(Arrays.hashCode(plaintext)));
+        } catch (final SecretException e) {
+            throw new RuntimeException(e);
+        }
+        return hashCode.get();
     }
 
     // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
@@ -141,7 +234,7 @@ public final class Secret implements AutoCloseable {
      *             been closed.
      */
     public void use(final Consumer<byte[]> consumer) throws SecretException {
-        final byte[] plaintext = decrypt(key, ciphertext);
+        final byte[] plaintext = decrypt(cipher, key, ciphertext);
         try {
             consumer.accept(plaintext);
         } finally {

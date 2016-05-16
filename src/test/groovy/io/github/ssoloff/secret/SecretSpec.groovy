@@ -22,9 +22,67 @@
 package io.github.ssoloff.secret
 
 import java.util.function.Consumer
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.NullCipher
+import javax.crypto.SecretKey
+import nl.jqno.equalsverifier.EqualsVerifier
+import nl.jqno.equalsverifier.Warning
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.Title
+
+@Subject(Secret)
+@Title('Unit tests for Secret')
+class SecretSpec extends Specification {
+    private static final def RED_CIPHER_ALGORITHM = 'RC4'
+    private static final def RED_CIPHER_KEY_SIZE_IN_BITS = 128
+
+    private static def generateSecretKeyForRedOrBlackCipher() {
+        def keyGenerator = KeyGenerator.getInstance(RED_CIPHER_ALGORITHM)
+        keyGenerator.init(RED_CIPHER_KEY_SIZE_IN_BITS)
+        keyGenerator.generateKey()
+    }
+
+    private static def getBlackCipher() {
+        new NullCipher()
+    }
+
+    private static def getRedCipher() {
+        Cipher.getInstance(RED_CIPHER_ALGORITHM)
+    }
+
+    def 'it should be equatable and hashable'() {
+        expect: 'it should be equatable and hashable'
+        EqualsVerifier.forClass(Secret.class)
+                .withPrefabValues(Cipher.class, getRedCipher(), getBlackCipher())
+                .withPrefabValues(SecretKey.class, generateSecretKeyForRedOrBlackCipher(), generateSecretKeyForRedOrBlackCipher())
+                .suppress(Warning.NULL_FIELDS)
+                .verify()
+    }
+
+    def 'it should be equatable in terms of plaintext'() {
+        given: 'a secret'
+        def plaintext = [1, 2, 3, 4] as byte[]
+        def secret1 = Secret.fromPlaintext(plaintext)
+        and: 'another secret with a different key and the same plaintext'
+        def secret2 = Secret.fromPlaintext(plaintext)
+
+        expect: 'they should be equal'
+        secret1 == secret2
+    }
+
+    def 'it should be hashable in terms of plaintext'() {
+        given: 'a secret'
+        def plaintext = [1, 2, 3, 4] as byte[]
+        def secret1 = Secret.fromPlaintext(plaintext)
+        and: 'another secret with a different key and the same plaintext'
+        def secret2 = Secret.fromPlaintext(plaintext)
+
+        expect: 'they should have the same hash code'
+        secret1.hashCode() == secret2.hashCode()
+    }
+}
 
 @Subject(Secret)
 @Title('Unit tests for Secret#close')
