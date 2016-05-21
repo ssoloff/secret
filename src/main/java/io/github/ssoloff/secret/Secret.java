@@ -24,8 +24,6 @@ package io.github.ssoloff.secret;
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -104,11 +102,10 @@ public final class Secret implements AutoCloseable {
         }
 
         final Secret other = (Secret) obj;
-        final AtomicBoolean equals = new AtomicBoolean(false);
         try {
-            use(plaintext -> {
+            return useAndReturn(plaintext -> {
                 try {
-                    other.use(otherPlaintext -> equals.set(Arrays.equals(plaintext, otherPlaintext)));
+                    return other.useAndReturn(otherPlaintext -> Arrays.equals(plaintext, otherPlaintext));
                 } catch (final SecretException e) {
                     throw new RuntimeException(e);
                 }
@@ -116,7 +113,6 @@ public final class Secret implements AutoCloseable {
         } catch (final SecretException e) {
             throw new RuntimeException(e);
         }
-        return equals.get();
     }
 
     /**
@@ -194,13 +190,11 @@ public final class Secret implements AutoCloseable {
 
     @Override
     public int hashCode() {
-        final AtomicInteger hashCode = new AtomicInteger();
         try {
-            use(plaintext -> hashCode.set(Arrays.hashCode(plaintext)));
+            return useAndReturn(plaintext -> Arrays.hashCode(plaintext));
         } catch (final SecretException e) {
             throw new RuntimeException(e);
         }
-        return hashCode.get();
     }
 
     // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
