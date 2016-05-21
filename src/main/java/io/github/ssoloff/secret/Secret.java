@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -234,9 +235,29 @@ public final class Secret implements AutoCloseable {
      *             been closed.
      */
     public void use(final Consumer<byte[]> consumer) throws SecretException {
+        useAndReturn(plaintext -> {
+            consumer.accept(plaintext);
+            return null;
+        });
+    }
+
+    /**
+     * Allows the specified function to perform an operation on the plaintext
+     * secret value and return the result of the operation.
+     *
+     * @param function
+     *            The function to receive the plaintext secret value.
+     *
+     * @return The result of applying the function.
+     *
+     * @throws SecretException
+     *             If an error occurs decrypting the secret or the secret has
+     *             been closed.
+     */
+    public <R> R useAndReturn(final Function<byte[], R> function) throws SecretException {
         final byte[] plaintext = decrypt(cipher, key, ciphertext);
         try {
-            consumer.accept(plaintext);
+            return function.apply(plaintext);
         } finally {
             scrub(plaintext);
         }

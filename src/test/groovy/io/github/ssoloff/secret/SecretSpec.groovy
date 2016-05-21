@@ -22,6 +22,7 @@
 package io.github.ssoloff.secret
 
 import java.util.function.Consumer
+import java.util.function.Function
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.NullCipher
@@ -119,15 +120,14 @@ class Secret_UseSpec extends Specification {
     def 'it should scrub the plaintext after the consumer returns'() {
         given: 'a secret'
         def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
-        def consumer = Mock(Consumer)
+        def plaintext
+        def consumer = { plaintext = it } as Consumer<byte[]>
 
         when: 'the secret is used'
         secret.use(consumer)
 
         then: 'the plaintext should be scrubbed after the consumer returns'
-        consumer.accept(_) >> { plaintext ->
-            plaintext == [0, 0, 0, 0]
-        }
+        plaintext == [0, 0, 0, 0]
     }
 
     def 'when closed it should throw an exception'() {
@@ -137,6 +137,64 @@ class Secret_UseSpec extends Specification {
 
         when: 'the secret is used'
         secret.use(Stub(Consumer))
+
+        then: 'it should throw an exception'
+        thrown(SecretException)
+    }
+}
+
+@Subject(Secret)
+@Title('Unit tests for Secret#useAndReturn')
+class Secret_UseAndReturnSpec extends Specification {
+    def 'it should provide plaintext to function'() {
+        given: 'a secret'
+        def plaintext = [1, 2, 3, 4] as byte[]
+        def secret = Secret.fromPlaintext(plaintext)
+        def function = Mock(Function)
+
+        when: 'the secret is used'
+        def actualResult = secret.useAndReturn(function)
+
+        then: 'the function should receive the plaintext'
+        1 * function.apply(plaintext)
+    }
+
+    def 'it should return function result'() {
+        given: 'a secret'
+        def plaintext = [1, 2, 3, 4] as byte[]
+        def secret = Secret.fromPlaintext(plaintext)
+        def expectedResult = 'result'
+        def function = Stub(Function) {
+            apply(_) >> expectedResult
+        }
+
+        when: 'the secret is used'
+        def actualResult = secret.useAndReturn(function)
+
+        then: 'it should return the function result'
+        actualResult == expectedResult
+    }
+
+    def 'it should scrub the plaintext after the function returns'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def plaintext
+        def function = { plaintext = it; null } as Function<byte[], Void>
+
+        when: 'the secret is used'
+        secret.useAndReturn(function)
+
+        then: 'the plaintext should be scrubbed after the function returns'
+        plaintext == [0, 0, 0, 0]
+    }
+
+    def 'when closed it should throw an exception'() {
+        given: 'a closed secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        secret.close()
+
+        when: 'the secret is used'
+        secret.useAndReturn(Stub(Function))
 
         then: 'it should throw an exception'
         thrown(SecretException)
