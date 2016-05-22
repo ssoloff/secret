@@ -21,6 +21,8 @@
  */
 package io.github.ssoloff.secret
 
+import io.github.ssoloff.secret.util.function.ThrowingConsumer
+import io.github.ssoloff.secret.util.function.ThrowingFunction
 import java.util.function.Consumer
 import java.util.function.Function
 import javax.crypto.Cipher
@@ -162,8 +164,7 @@ class Secret_UseAndReturnSpec extends Specification {
 
     def 'it should return function result'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret = Secret.fromPlaintext(plaintext)
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
         String expectedResult = 'result'
         Function<byte[], String> function = Stub() {
             apply(_) >> expectedResult
@@ -197,6 +198,143 @@ class Secret_UseAndReturnSpec extends Specification {
 
         when: 'the secret is used'
         secret.useAndReturn(function)
+
+        then: 'it should throw an exception'
+        thrown(IllegalStateException)
+    }
+}
+
+@Subject(Secret)
+@Title('Unit tests for Secret#useAndReturnOrThrow')
+class Secret_UseAndReturnOrThrowSpec extends Specification {
+    def 'it should provide plaintext to function'() {
+        given: 'a secret'
+        byte[] plaintext = [1, 2, 3, 4]
+        def secret = Secret.fromPlaintext(plaintext)
+        ThrowingFunction<byte[], Void, Exception> function = Mock()
+
+        when: 'the secret is used'
+        def actualResult = secret.useAndReturnOrThrow(function)
+
+        then: 'the function should receive the plaintext'
+        1 * function.apply(plaintext)
+    }
+
+    def 'it should return function result'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        String expectedResult = 'result'
+        ThrowingFunction<byte[], String, Exception> function = Stub() {
+            apply(_) >> expectedResult
+        }
+
+        when: 'the secret is used'
+        def actualResult = secret.useAndReturnOrThrow(function)
+
+        then: 'it should return the function result'
+        actualResult == expectedResult
+    }
+
+    def 'when function throws an exception it should throw function exception'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        and: 'a function that throws an exception'
+        ThrowingFunction<byte[], String, IOException> function = Stub() {
+            apply(_) >> {
+                throw new IOException('the-message')
+            }
+        }
+
+        when: 'the secret is used'
+        secret.useAndReturnOrThrow(function)
+
+        then: 'it should throw an exception'
+        def e = thrown(IOException)
+        e.message == 'the-message'
+    }
+
+    def 'it should scrub the plaintext after the function returns'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        byte[] plaintext = []
+        ThrowingFunction<byte[], Void, Exception> function = { plaintext = it; null }
+
+        when: 'the secret is used'
+        secret.useAndReturnOrThrow(function)
+
+        then: 'the plaintext should be scrubbed after the function returns'
+        plaintext == [0, 0, 0, 0]
+    }
+
+    def 'when closed it should throw an exception'() {
+        given: 'a closed secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        secret.close()
+        ThrowingFunction<byte[], Void, Exception> function = Stub()
+
+        when: 'the secret is used'
+        secret.useAndReturnOrThrow(function)
+
+        then: 'it should throw an exception'
+        thrown(IllegalStateException)
+    }
+}
+
+@Subject(Secret)
+@Title('Unit tests for Secret#useOrThrow')
+class Secret_UseOrThrowSpec extends Specification {
+    def 'it should provide plaintext to consumer'() {
+        given: 'a secret'
+        byte[] plaintext = [1, 2, 3, 4]
+        def secret = Secret.fromPlaintext(plaintext)
+        ThrowingConsumer<byte[], Exception> consumer = Mock()
+
+        when: 'the secret is used'
+        secret.useOrThrow(consumer)
+
+        then: 'the consumer should receive the plaintext'
+        1 * consumer.accept(plaintext)
+    }
+
+    def 'when consumer throws an exception it should throw consumer exception'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        and: 'a consumer that throws an exception'
+        ThrowingConsumer<byte[], IOException> consumer = Stub() {
+            accept(_) >> {
+                throw new IOException('the-message')
+            }
+        }
+
+        when: 'the secret is used'
+        secret.useOrThrow(consumer)
+
+        then: 'it should throw an exception'
+        def e = thrown(IOException)
+        e.message == 'the-message'
+    }
+
+    def 'it should scrub the plaintext after the consumer returns'() {
+        given: 'a secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        byte[] plaintext = []
+        ThrowingConsumer<byte[], Exception> consumer = { plaintext = it }
+
+        when: 'the secret is used'
+        secret.useOrThrow(consumer)
+
+        then: 'the plaintext should be scrubbed after the consumer returns'
+        plaintext == [0, 0, 0, 0]
+    }
+
+    def 'when closed it should throw an exception'() {
+        given: 'a closed secret'
+        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        secret.close()
+        ThrowingConsumer<byte[], Exception> consumer = Stub()
+
+        when: 'the secret is used'
+        secret.useOrThrow(consumer)
 
         then: 'it should throw an exception'
         thrown(IllegalStateException)

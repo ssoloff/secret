@@ -35,6 +35,9 @@ import javax.security.auth.Destroyable;
 
 import org.eclipse.jdt.annotation.Nullable;
 
+import io.github.ssoloff.secret.util.function.ThrowingConsumer;
+import io.github.ssoloff.secret.util.function.ThrowingFunction;
+
 /**
  * A container for a value that must be kept secret and only disclosed for as
  * short of a time as possible.
@@ -75,6 +78,27 @@ public final class Secret implements AutoCloseable {
         scrub(key);
     }
 
+    private static ThrowingFunction<byte[], @Nullable Void, RuntimeException> convertConsumerToThrowingFunction(
+            final Consumer<byte[]> consumer) {
+        return t -> {
+            consumer.accept(t);
+            return null;
+        };
+    }
+
+    private static <R> ThrowingFunction<byte[], R, RuntimeException> convertFunctionToThrowingFunction(
+            final Function<byte[], R> function) {
+        return t -> function.apply(t);
+    }
+
+    private static <E extends Throwable> ThrowingFunction<byte[], @Nullable Void, E> convertThrowingConsumerToThrowingFunction(
+            final ThrowingConsumer<byte[], E> consumer) {
+        return t -> {
+            consumer.accept(t);
+            return null;
+        };
+    }
+
     private byte[] decrypt() {
         try {
             return cipher(cipher, Cipher.DECRYPT_MODE, key, ciphertext);
@@ -95,7 +119,8 @@ public final class Secret implements AutoCloseable {
     }
 
     @Override
-    public boolean equals(final @Nullable Object obj) {
+    public boolean equals(
+            final @Nullable Object obj) {
         if (obj == this) {
             return true;
         } else if (!(obj instanceof Secret)) {
@@ -126,7 +151,8 @@ public final class Secret implements AutoCloseable {
      * @throws SecretException
      *             If an error occurs creating the secret.
      */
-    public static Secret fromPlaintext(final byte[] plaintext) throws SecretException {
+    public static Secret fromPlaintext(
+            final byte[] plaintext) throws SecretException {
         final Cipher cipher = getDefaultCipher();
         final SecretKey key = generateSecretKeyForDefaultCipher();
         return fromPlaintext(plaintext, cipher, key);
@@ -187,7 +213,8 @@ public final class Secret implements AutoCloseable {
     }
 
     // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
-    private static boolean isDestroyable(final Destroyable destroyable) {
+    private static boolean isDestroyable(
+            final Destroyable destroyable) {
         try {
             final Method destroyMethod = destroyable.getClass().getMethod("destroy");
             return !destroyMethod.isDefault();
@@ -196,11 +223,13 @@ public final class Secret implements AutoCloseable {
         }
     }
 
-    private static void scrub(final byte[] bytes) {
+    private static void scrub(
+            final byte[] bytes) {
         Arrays.fill(bytes, (byte) 0);
     }
 
-    private static void scrub(final SecretKey key) throws SecretException {
+    private static void scrub(
+            final SecretKey key) throws SecretException {
         if (!key.isDestroyed() && isDestroyable(key)) {
             try {
                 key.destroy();
@@ -220,11 +249,9 @@ public final class Secret implements AutoCloseable {
      * @throws IllegalStateException
      *             If the secret has been closed.
      */
-    public void use(final Consumer<byte[]> consumer) {
-        useAndReturn(plaintext -> {
-            consumer.accept(plaintext);
-            return null;
-        });
+    public void use(
+            final Consumer<byte[]> consumer) {
+        useAndReturnOrThrow(convertConsumerToThrowingFunction(consumer));
     }
 
     /**
@@ -239,12 +266,50 @@ public final class Secret implements AutoCloseable {
      * @throws IllegalStateException
      *             If the secret has been closed.
      */
-    public <R> R useAndReturn(final Function<byte[], R> function) {
+    public <R> R useAndReturn(
+            final Function<byte[], R> function) {
+        return useAndReturnOrThrow(convertFunctionToThrowingFunction(function));
+    }
+
+    /**
+     * Allows the specified function to perform an operation on the plaintext
+     * secret value and return the result of the operation or throw an
+     * exception.
+     *
+     * @param function
+     *            The function to receive the plaintext secret value.
+     *
+     * @return The result of applying the function.
+     *
+     * @throws E
+     *             If an error occurs in the function.
+     * @throws IllegalStateException
+     *             If the secret has been closed.
+     */
+    public <R, E extends Throwable> R useAndReturnOrThrow(
+            final ThrowingFunction<byte[], R, E> function) throws E {
         final byte[] plaintext = decrypt();
         try {
             return function.apply(plaintext);
         } finally {
             scrub(plaintext);
         }
+    }
+
+    /**
+     * Allows the specified consumer to perform an operation on the plaintext
+     * secret value or throw an exception.
+     *
+     * @param consumer
+     *            The consumer to receive the plaintext secret value.
+     *
+     * @throws E
+     *             If an error occurs in the consumer.
+     * @throws IllegalStateException
+     *             If the secret has been closed.
+     */
+    public <E extends Throwable> void useOrThrow(
+            final ThrowingConsumer<byte[], E> consumer) throws E {
+        useAndReturnOrThrow(convertThrowingConsumerToThrowingFunction(consumer));
     }
 }
