@@ -64,33 +64,34 @@ public final class Secret implements AutoCloseable {
             final Cipher cipher,
             final int opmode,
             final SecretKey key,
-            final byte[] input) throws SecretException {
-        try {
-            cipher.init(opmode, key);
-            return cipher.doFinal(input);
-        } catch (final GeneralSecurityException e) {
-            throw new SecretException("failed to apply cipher", e);
-        }
+            final byte[] input) throws GeneralSecurityException {
+        cipher.init(opmode, key);
+        return cipher.doFinal(input);
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws SecretException {
         scrub(ciphertext);
         scrub(key);
     }
 
-    private static byte[] decrypt(
-            final Cipher cipher,
-            final SecretKey key,
-            final byte[] ciphertext) throws SecretException {
-        return cipher(cipher, Cipher.DECRYPT_MODE, key, ciphertext);
+    private byte[] decrypt() {
+        try {
+            return cipher(cipher, Cipher.DECRYPT_MODE, key, ciphertext);
+        } catch (final GeneralSecurityException e) {
+            throw new IllegalStateException("failed to decrypt ciphertext", e);
+        }
     }
 
     private static byte[] encrypt(
             final Cipher cipher,
             final SecretKey key,
             final byte[] plaintext) throws SecretException {
-        return cipher(cipher, Cipher.ENCRYPT_MODE, key, plaintext);
+        try {
+            return cipher(cipher, Cipher.ENCRYPT_MODE, key, plaintext);
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("failed to encrypt plaintext", e);
+        }
     }
 
     @Override
@@ -102,17 +103,9 @@ public final class Secret implements AutoCloseable {
         }
 
         final Secret other = (Secret) obj;
-        try {
-            return useAndReturn(plaintext -> {
-                try {
-                    return other.useAndReturn(otherPlaintext -> Arrays.equals(plaintext, otherPlaintext));
-                } catch (final SecretException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-        } catch (final SecretException e) {
-            throw new RuntimeException(e);
-        }
+        return useAndReturn(
+                plaintext -> other.useAndReturn(
+                        otherPlaintext -> Arrays.equals(plaintext, otherPlaintext)));
     }
 
     /**
@@ -176,7 +169,7 @@ public final class Secret implements AutoCloseable {
             keyGenerator.init(DEFAULT_CIPHER_KEY_SIZE_IN_BITS);
             return keyGenerator.generateKey();
         } catch (final GeneralSecurityException e) {
-            throw new SecretException("failed to generate secret key", e);
+            throw new SecretException("failed to generate secret key for default cipher", e);
         }
     }
 
@@ -184,17 +177,13 @@ public final class Secret implements AutoCloseable {
         try {
             return Cipher.getInstance(DEFAULT_CIPHER_ALGORITHM);
         } catch (final GeneralSecurityException e) {
-            throw new SecretException("", e);
+            throw new SecretException("failed to get default cipher", e);
         }
     }
 
     @Override
     public int hashCode() {
-        try {
-            return useAndReturn(plaintext -> Arrays.hashCode(plaintext));
-        } catch (final SecretException e) {
-            throw new RuntimeException(e);
-        }
+        return useAndReturn(plaintext -> Arrays.hashCode(plaintext));
     }
 
     // workaround for <https://bugs.openjdk.java.net/browse/JDK-8008795>
@@ -211,9 +200,13 @@ public final class Secret implements AutoCloseable {
         Arrays.fill(bytes, (byte) 0);
     }
 
-    private static void scrub(final SecretKey key) throws DestroyFailedException {
+    private static void scrub(final SecretKey key) throws SecretException {
         if (!key.isDestroyed() && isDestroyable(key)) {
-            key.destroy();
+            try {
+                key.destroy();
+            } catch (final DestroyFailedException e) {
+                throw new SecretException("failed to destroy secret key", e);
+            }
         }
     }
 
@@ -224,11 +217,10 @@ public final class Secret implements AutoCloseable {
      * @param consumer
      *            The consumer to receive the plaintext secret value.
      *
-     * @throws SecretException
-     *             If an error occurs decrypting the secret or the secret has
-     *             been closed.
+     * @throws IllegalStateException
+     *             If the secret has been closed.
      */
-    public void use(final Consumer<byte[]> consumer) throws SecretException {
+    public void use(final Consumer<byte[]> consumer) {
         useAndReturn(plaintext -> {
             consumer.accept(plaintext);
             return null;
@@ -244,12 +236,11 @@ public final class Secret implements AutoCloseable {
      *
      * @return The result of applying the function.
      *
-     * @throws SecretException
-     *             If an error occurs decrypting the secret or the secret has
-     *             been closed.
+     * @throws IllegalStateException
+     *             If the secret has been closed.
      */
-    public <R> R useAndReturn(final Function<byte[], R> function) throws SecretException {
-        final byte[] plaintext = decrypt(cipher, key, ciphertext);
+    public <R> R useAndReturn(final Function<byte[], R> function) {
+        final byte[] plaintext = decrypt();
         try {
             return function.apply(plaintext);
         } finally {

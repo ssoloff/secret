@@ -140,7 +140,7 @@ class Secret_UseSpec extends Specification {
         secret.use(consumer)
 
         then: 'it should throw an exception'
-        thrown(SecretException)
+        thrown(IllegalStateException)
     }
 }
 
@@ -199,6 +199,6 @@ class Secret_UseAndReturnSpec extends Specification {
         secret.useAndReturn(function)
 
         then: 'it should throw an exception'
-        thrown(SecretException)
+        thrown(IllegalStateException)
     }
 }
