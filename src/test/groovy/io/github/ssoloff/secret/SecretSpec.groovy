@@ -64,7 +64,7 @@ class SecretSpec extends Specification {
 
     def 'it should be equatable in terms of plaintext'() {
         given: 'a secret'
-        def plaintext = [1, 2, 3, 4] as byte[]
+        byte[] plaintext = [1, 2, 3, 4]
         def secret1 = Secret.fromPlaintext(plaintext)
         and: 'another secret with a different key and the same plaintext'
         def secret2 = Secret.fromPlaintext(plaintext)
@@ -75,7 +75,7 @@ class SecretSpec extends Specification {
 
     def 'it should be hashable in terms of plaintext'() {
         given: 'a secret'
-        def plaintext = [1, 2, 3, 4] as byte[]
+        byte[] plaintext = [1, 2, 3, 4]
         def secret1 = Secret.fromPlaintext(plaintext)
         and: 'another secret with a different key and the same plaintext'
         def secret2 = Secret.fromPlaintext(plaintext)
@@ -106,9 +106,9 @@ class Secret_CloseSpec extends Specification {
 class Secret_UseSpec extends Specification {
     def 'it should provide plaintext to consumer'() {
         given: 'a secret'
-        def plaintext = [1, 2, 3, 4] as byte[]
+        byte[] plaintext = [1, 2, 3, 4]
         def secret = Secret.fromPlaintext(plaintext)
-        def consumer = Mock(Consumer)
+        Consumer<byte[]> consumer = Mock()
 
         when: 'the secret is used'
         secret.use(consumer)
@@ -120,8 +120,8 @@ class Secret_UseSpec extends Specification {
     def 'it should scrub the plaintext after the consumer returns'() {
         given: 'a secret'
         def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
-        def plaintext
-        def consumer = { plaintext = it } as Consumer<byte[]>
+        byte[] plaintext = []
+        Consumer<byte[]> consumer = { plaintext = it }
 
         when: 'the secret is used'
         secret.use(consumer)
@@ -134,9 +134,10 @@ class Secret_UseSpec extends Specification {
         given: 'a closed secret'
         def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
         secret.close()
+        Consumer<byte[]> consumer = Stub()
 
         when: 'the secret is used'
-        secret.use(Stub(Consumer))
+        secret.use(consumer)
 
         then: 'it should throw an exception'
         thrown(SecretException)
@@ -148,9 +149,9 @@ class Secret_UseSpec extends Specification {
 class Secret_UseAndReturnSpec extends Specification {
     def 'it should provide plaintext to function'() {
         given: 'a secret'
-        def plaintext = [1, 2, 3, 4] as byte[]
+        byte[] plaintext = [1, 2, 3, 4]
         def secret = Secret.fromPlaintext(plaintext)
-        def function = Mock(Function)
+        Function<byte[], Void> function = Mock()
 
         when: 'the secret is used'
         def actualResult = secret.useAndReturn(function)
@@ -161,10 +162,10 @@ class Secret_UseAndReturnSpec extends Specification {
 
     def 'it should return function result'() {
         given: 'a secret'
-        def plaintext = [1, 2, 3, 4] as byte[]
+        byte[] plaintext = [1, 2, 3, 4]
         def secret = Secret.fromPlaintext(plaintext)
-        def expectedResult = 'result'
-        def function = Stub(Function) {
+        String expectedResult = 'result'
+        Function<byte[], String> function = Stub() {
             apply(_) >> expectedResult
         }
 
@@ -178,8 +179,8 @@ class Secret_UseAndReturnSpec extends Specification {
     def 'it should scrub the plaintext after the function returns'() {
         given: 'a secret'
         def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
-        def plaintext
-        def function = { plaintext = it; null } as Function<byte[], Void>
+        byte[] plaintext = []
+        Function<byte[], Void> function = { plaintext = it; null }
 
         when: 'the secret is used'
         secret.useAndReturn(function)
@@ -192,9 +193,10 @@ class Secret_UseAndReturnSpec extends Specification {
         given: 'a closed secret'
         def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
         secret.close()
+        Function<byte[], Void> function = Stub()
 
         when: 'the secret is used'
-        secret.useAndReturn(Stub(Function))
+        secret.useAndReturn(function)
 
         then: 'it should throw an exception'
         thrown(SecretException)
