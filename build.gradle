@@ -16,7 +16,7 @@ dependencies {
   )
 
   testCompile(
-    [group: 'nl.jqno.equalsverifier', name: 'equalsverifier', version: '2.0.2'],
+    [group: 'nl.jqno.equalsverifier', name: 'equalsverifier', version: '2.1'],
     [group: 'org.spockframework', name: 'spock-core', version: '1.0-groovy-2.4']
   )
 }
