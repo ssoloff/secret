@@ -30,7 +30,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.NullCipher
 import javax.crypto.SecretKey
 import nl.jqno.equalsverifier.EqualsVerifier
-import nl.jqno.equalsverifier.Warning
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.Title
@@ -82,7 +81,6 @@ class SecretSpec extends AbstractSecretSpecification {
         EqualsVerifier.forClass(Secret.class)
                 .withPrefabValues(Cipher.class, getRedCipher(), getBlackCipher())
                 .withPrefabValues(SecretKey.class, generateSecretKeyForRedOrBlackCipher(), generateSecretKeyForRedOrBlackCipher())
-                .suppress(Warning.NULL_FIELDS)
                 .verify()
     }
 
