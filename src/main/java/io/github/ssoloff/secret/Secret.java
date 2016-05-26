@@ -26,6 +26,7 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Logger;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -50,8 +51,11 @@ public final class Secret implements AutoCloseable {
     private static final String DEFAULT_CIPHER_ALGORITHM = "AES";
     private static final int DEFAULT_CIPHER_KEY_SIZE_IN_BITS = 128;
 
+    private static final Logger logger = Logger.getLogger(Secret.class.getName());
+
     private final Cipher cipher;
     private final byte[] ciphertext;
+    private transient volatile boolean closed = false;
     private final SecretKey key;
 
     private Secret(
@@ -74,8 +78,12 @@ public final class Secret implements AutoCloseable {
 
     @Override
     public void close() throws SecretException {
-        scrub(ciphertext);
-        scrub(key);
+        try {
+            scrub(ciphertext);
+            scrub(key);
+        } finally {
+            closed = true;
+        }
     }
 
     private static ThrowingFunction<byte[], @Nullable Void, RuntimeException> convertConsumerToThrowingFunction(
@@ -131,6 +139,13 @@ public final class Secret implements AutoCloseable {
         return useAndReturn(
                 plaintext -> other.useAndReturn(
                         otherPlaintext -> Arrays.equals(plaintext, otherPlaintext)));
+    }
+
+    @Override
+    protected void finalize() {
+        if (!closed) {
+            logger.warning(String.format("%s not explicitly closed", this));
+        }
     }
 
     /**

@@ -35,9 +35,31 @@ import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.Title
 
+abstract class AbstractSecretSpecification extends Specification {
+    protected static final List<Byte> PLAINTEXT = [1, 2, 3, 4].asImmutable()
+
+    private final def secrets = []
+
+    protected def makeSecret(List<Byte> plaintext) {
+        def secret = Secret.fromPlaintext(plaintext as byte[])
+        secrets << secret
+        secret
+    }
+
+    def cleanup() {
+        secrets.forEach {
+            try {
+                it.close()
+            } catch (final Exception e) {
+                e.printStackTrace()
+            }
+        }
+    }
+}
+
 @Subject(Secret)
 @Title('Unit tests for Secret')
-class SecretSpec extends Specification {
+class SecretSpec extends AbstractSecretSpecification {
     private static final def RED_CIPHER_ALGORITHM = 'RC4'
     private static final def RED_CIPHER_KEY_SIZE_IN_BITS = 128
 
@@ -66,10 +88,9 @@ class SecretSpec extends Specification {
 
     def 'it should be equatable in terms of plaintext'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret1 = Secret.fromPlaintext(plaintext)
+        def secret1 = makeSecret(PLAINTEXT)
         and: 'another secret with a different key and the same plaintext'
-        def secret2 = Secret.fromPlaintext(plaintext)
+        def secret2 = makeSecret(PLAINTEXT)
 
         expect: 'they should be equal'
         secret1 == secret2
@@ -77,10 +98,9 @@ class SecretSpec extends Specification {
 
     def 'it should be hashable in terms of plaintext'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret1 = Secret.fromPlaintext(plaintext)
+        def secret1 = makeSecret(PLAINTEXT)
         and: 'another secret with a different key and the same plaintext'
-        def secret2 = Secret.fromPlaintext(plaintext)
+        def secret2 = makeSecret(PLAINTEXT)
 
         expect: 'they should have the same hash code'
         secret1.hashCode() == secret2.hashCode()
@@ -89,10 +109,10 @@ class SecretSpec extends Specification {
 
 @Subject(Secret)
 @Title('Unit tests for Secret#close')
-class Secret_CloseSpec extends Specification {
+class Secret_CloseSpec extends AbstractSecretSpecification {
     def 'when closed it should not throw an exception'() {
         given: 'a closed secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         secret.close()
 
         when: 'the secret is closed again'
@@ -105,23 +125,22 @@ class Secret_CloseSpec extends Specification {
 
 @Subject(Secret)
 @Title('Unit tests for Secret#use')
-class Secret_UseSpec extends Specification {
+class Secret_UseSpec extends AbstractSecretSpecification {
     def 'it should provide plaintext to consumer'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret = Secret.fromPlaintext(plaintext)
+        def secret = makeSecret(PLAINTEXT)
         Consumer<byte[]> consumer = Mock()
 
         when: 'the secret is used'
         secret.use(consumer)
 
         then: 'the consumer should receive the plaintext'
-        1 * consumer.accept(plaintext)
+        1 * consumer.accept(PLAINTEXT)
     }
 
     def 'it should scrub the plaintext after the consumer returns'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         byte[] plaintext = []
         Consumer<byte[]> consumer = { plaintext = it }
 
@@ -134,7 +153,7 @@ class Secret_UseSpec extends Specification {
 
     def 'when closed it should throw an exception'() {
         given: 'a closed secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         secret.close()
         Consumer<byte[]> consumer = Stub()
 
@@ -148,23 +167,22 @@ class Secret_UseSpec extends Specification {
 
 @Subject(Secret)
 @Title('Unit tests for Secret#useAndReturn')
-class Secret_UseAndReturnSpec extends Specification {
+class Secret_UseAndReturnSpec extends AbstractSecretSpecification {
     def 'it should provide plaintext to function'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret = Secret.fromPlaintext(plaintext)
+        def secret = makeSecret(PLAINTEXT)
         Function<byte[], Void> function = Mock()
 
         when: 'the secret is used'
         def actualResult = secret.useAndReturn(function)
 
         then: 'the function should receive the plaintext'
-        1 * function.apply(plaintext)
+        1 * function.apply(PLAINTEXT)
     }
 
     def 'it should return function result'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         String expectedResult = 'result'
         Function<byte[], String> function = Stub() {
             apply(_) >> expectedResult
@@ -179,7 +197,7 @@ class Secret_UseAndReturnSpec extends Specification {
 
     def 'it should scrub the plaintext after the function returns'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         byte[] plaintext = []
         Function<byte[], Void> function = { plaintext = it; null }
 
@@ -192,7 +210,7 @@ class Secret_UseAndReturnSpec extends Specification {
 
     def 'when closed it should throw an exception'() {
         given: 'a closed secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         secret.close()
         Function<byte[], Void> function = Stub()
 
@@ -206,23 +224,22 @@ class Secret_UseAndReturnSpec extends Specification {
 
 @Subject(Secret)
 @Title('Unit tests for Secret#useAndReturnOrThrow')
-class Secret_UseAndReturnOrThrowSpec extends Specification {
+class Secret_UseAndReturnOrThrowSpec extends AbstractSecretSpecification {
     def 'it should provide plaintext to function'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret = Secret.fromPlaintext(plaintext)
+        def secret = makeSecret(PLAINTEXT)
         ThrowingFunction<byte[], Void, Exception> function = Mock()
 
         when: 'the secret is used'
         def actualResult = secret.useAndReturnOrThrow(function)
 
         then: 'the function should receive the plaintext'
-        1 * function.apply(plaintext)
+        1 * function.apply(PLAINTEXT)
     }
 
     def 'it should return function result'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         String expectedResult = 'result'
         ThrowingFunction<byte[], String, Exception> function = Stub() {
             apply(_) >> expectedResult
@@ -237,7 +254,7 @@ class Secret_UseAndReturnOrThrowSpec extends Specification {
 
     def 'when function throws an exception it should throw function exception'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         and: 'a function that throws an exception'
         ThrowingFunction<byte[], String, IOException> function = Stub() {
             apply(_) >> {
@@ -255,7 +272,7 @@ class Secret_UseAndReturnOrThrowSpec extends Specification {
 
     def 'it should scrub the plaintext after the function returns'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         byte[] plaintext = []
         ThrowingFunction<byte[], Void, Exception> function = { plaintext = it; null }
 
@@ -268,7 +285,7 @@ class Secret_UseAndReturnOrThrowSpec extends Specification {
 
     def 'when closed it should throw an exception'() {
         given: 'a closed secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         secret.close()
         ThrowingFunction<byte[], Void, Exception> function = Stub()
 
@@ -282,23 +299,22 @@ class Secret_UseAndReturnOrThrowSpec extends Specification {
 
 @Subject(Secret)
 @Title('Unit tests for Secret#useOrThrow')
-class Secret_UseOrThrowSpec extends Specification {
+class Secret_UseOrThrowSpec extends AbstractSecretSpecification {
     def 'it should provide plaintext to consumer'() {
         given: 'a secret'
-        byte[] plaintext = [1, 2, 3, 4]
-        def secret = Secret.fromPlaintext(plaintext)
+        def secret = makeSecret(PLAINTEXT)
         ThrowingConsumer<byte[], Exception> consumer = Mock()
 
         when: 'the secret is used'
         secret.useOrThrow(consumer)
 
         then: 'the consumer should receive the plaintext'
-        1 * consumer.accept(plaintext)
+        1 * consumer.accept(PLAINTEXT)
     }
 
     def 'when consumer throws an exception it should throw consumer exception'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         and: 'a consumer that throws an exception'
         ThrowingConsumer<byte[], IOException> consumer = Stub() {
             accept(_) >> {
@@ -316,7 +332,7 @@ class Secret_UseOrThrowSpec extends Specification {
 
     def 'it should scrub the plaintext after the consumer returns'() {
         given: 'a secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         byte[] plaintext = []
         ThrowingConsumer<byte[], Exception> consumer = { plaintext = it }
 
@@ -329,7 +345,7 @@ class Secret_UseOrThrowSpec extends Specification {
 
     def 'when closed it should throw an exception'() {
         given: 'a closed secret'
-        def secret = Secret.fromPlaintext([1, 2, 3, 4] as byte[])
+        def secret = makeSecret(PLAINTEXT)
         secret.close()
         ThrowingConsumer<byte[], Exception> consumer = Stub()
 
