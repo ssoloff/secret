@@ -170,7 +170,7 @@ public final class Secret implements AutoCloseable {
             final byte[] plaintext) throws SecretException {
         final Cipher cipher = getDefaultCipher();
         final SecretKey key = generateSecretKeyForDefaultCipher();
-        return fromPlaintext(plaintext, cipher, key);
+        return fromPlaintext(cipher, key, plaintext);
     }
 
     /**
@@ -188,6 +188,10 @@ public final class Secret implements AutoCloseable {
      * destroyed when the secret is closed.
      * </p>
      *
+     * @param cipher
+     *            The cipher used to encrypt the plaintext.
+     * @param key
+     *            The key used to encrypt the plaintext.
      * @param plaintext
      *            The plaintext value to be kept secret.
      *
@@ -197,9 +201,9 @@ public final class Secret implements AutoCloseable {
      *             If an error occurs creating the secret.
      */
     public static Secret fromPlaintext(
-            final byte[] plaintext,
             final Cipher cipher,
-            final SecretKey key) throws SecretException {
+            final SecretKey key,
+            final byte[] plaintext) throws SecretException {
         final byte[] ciphertext = encrypt(cipher, key, plaintext);
         return new Secret(cipher, key, ciphertext);
     }
