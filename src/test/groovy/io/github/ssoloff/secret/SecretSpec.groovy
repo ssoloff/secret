@@ -40,7 +40,7 @@ abstract class AbstractSecretSpecification extends Specification {
     private final def secrets = []
 
     protected def makeSecret(List<Byte> plaintext) {
-        def secret = Secret.fromPlaintext(plaintext as byte[])
+        def secret = Secret.fromSharedPlaintext(plaintext as byte[])
         secrets << secret
         secret
     }
@@ -118,6 +118,46 @@ class Secret_CloseSpec extends AbstractSecretSpecification {
 
         then: 'it should not throw an exception'
         noExceptionThrown()
+    }
+}
+
+@Subject(Secret)
+@Title('Unit tests for Secret#fromPlaintext')
+class Secret_FromPlaintextSpec extends Specification {
+    def 'it should scrub the plaintext'() {
+        given: 'an unshared plaintext buffer'
+        byte[] plaintext = [1, 2, 3, 4]
+
+        when: 'the secret is created from unshared plaintext'
+        def secret = Secret.fromPlaintext(plaintext)
+
+        then: 'it should scrub the plaintext'
+        plaintext == [0, 0, 0, 0]
+
+        cleanup:
+        if (secret) {
+            secret.close()
+        }
+    }
+}
+
+@Subject(Secret)
+@Title('Unit tests for Secret#fromSharedPlaintext')
+class Secret_FromSharedPlaintextSpec extends Specification {
+    def 'it should not scrub the plaintext'() {
+        given: 'a shared plaintext buffer'
+        byte[] plaintext = [1, 2, 3, 4]
+
+        when: 'the secret is created from shared plaintext'
+        def secret = Secret.fromSharedPlaintext(plaintext)
+
+        then: 'it should not scrub the plaintext'
+        plaintext == [1, 2, 3, 4]
+
+        cleanup:
+        if (secret) {
+            secret.close()
+        }
     }
 }
 

@@ -154,8 +154,9 @@ public final class Secret implements AutoCloseable {
      * ciphertext.
      *
      * <p>
-     * The plaintext value is not modified by this method and should be scrubbed
-     * by the caller as soon as possible if it is no longer needed.
+     * The plaintext value is scrubbed by this method before returning. If the
+     * plaintext must not be modified, call {@link #fromSharedPlaintext(byte[])}
+     * instead.
      * </p>
      *
      * @param plaintext
@@ -168,9 +169,7 @@ public final class Secret implements AutoCloseable {
      */
     public static Secret fromPlaintext(
             final byte[] plaintext) throws SecretException {
-        final Cipher cipher = getDefaultCipher();
-        final SecretKey key = generateSecretKeyForDefaultCipher();
-        return fromPlaintext(cipher, key, plaintext);
+        return fromPlaintext(getDefaultCipher(), generateSecretKeyForDefaultCipher(), plaintext);
     }
 
     /**
@@ -179,8 +178,9 @@ public final class Secret implements AutoCloseable {
      * ciphertext.
      *
      * <p>
-     * The plaintext value is not modified by this method and should be scrubbed
-     * by the caller as soon as possible if it is no longer needed.
+     * The plaintext value is scrubbed by this method before returning. If the
+     * plaintext must not be modified, call
+     * {@link #fromSharedPlaintext(Cipher, SecretKey, byte[])} instead.
      * </p>
      *
      * <p>
@@ -201,6 +201,66 @@ public final class Secret implements AutoCloseable {
      *             If an error occurs creating the secret.
      */
     public static Secret fromPlaintext(
+            final Cipher cipher,
+            final SecretKey key,
+            final byte[] plaintext) throws SecretException {
+        final byte[] ciphertext = encrypt(cipher, key, plaintext);
+        final Secret secret = new Secret(cipher, key, ciphertext);
+        scrub(plaintext);
+        return secret;
+    }
+
+    /**
+     * Creates a new instance of the {@code Secret} class from the specified
+     * shared plaintext value using the AES cipher and a 128-bit key to generate
+     * the ciphertext.
+     *
+     * <p>
+     * The shared plaintext value is not modified by this method and should be
+     * scrubbed by the caller as soon as possible if it is no longer needed.
+     * </p>
+     *
+     * @param plaintext
+     *            The shared plaintext value to be kept secret.
+     *
+     * @return A new instance of the {@code Secret} class.
+     *
+     * @throws SecretException
+     *             If an error occurs creating the secret.
+     */
+    public static Secret fromSharedPlaintext(
+            final byte[] plaintext) throws SecretException {
+        return fromSharedPlaintext(getDefaultCipher(), generateSecretKeyForDefaultCipher(), plaintext);
+    }
+
+    /**
+     * Creates a new instance of the {@code Secret} class from the specified
+     * shared plaintext value using the specified cipher and key to generate the
+     * ciphertext.
+     *
+     * <p>
+     * The shared plaintext value is not modified by this method and should be
+     * scrubbed by the caller as soon as possible if it is no longer needed.
+     * </p>
+     *
+     * <p>
+     * This method takes ownership of the specified key and will ensure it is
+     * destroyed when the secret is closed.
+     * </p>
+     *
+     * @param cipher
+     *            The cipher used to encrypt the plaintext.
+     * @param key
+     *            The key used to encrypt the plaintext.
+     * @param plaintext
+     *            The shared plaintext value to be kept secret.
+     *
+     * @return A new instance of the {@code Secret} class.
+     *
+     * @throws SecretException
+     *             If an error occurs creating the secret.
+     */
+    public static Secret fromSharedPlaintext(
             final Cipher cipher,
             final SecretKey key,
             final byte[] plaintext) throws SecretException {
