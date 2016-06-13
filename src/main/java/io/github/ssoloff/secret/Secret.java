@@ -107,6 +107,24 @@ public final class Secret implements AutoCloseable {
         };
     }
 
+    private static Cipher createDefaultCipher() throws SecretException {
+        try {
+            return Cipher.getInstance(DEFAULT_CIPHER_ALGORITHM);
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("failed to create default cipher", e);
+        }
+    }
+
+    private static KeyGenerator createKeyGeneratorForDefaultCipher() throws SecretException {
+        try {
+            final KeyGenerator keyGenerator = KeyGenerator.getInstance(DEFAULT_CIPHER_ALGORITHM);
+            keyGenerator.init(DEFAULT_CIPHER_KEY_SIZE_IN_BITS);
+            return keyGenerator;
+        } catch (final GeneralSecurityException e) {
+            throw new SecretException("failed to create key generator for default cipher", e);
+        }
+    }
+
     private byte[] decrypt() {
         try {
             return cipher(cipher, Cipher.DECRYPT_MODE, key, ciphertext);
@@ -169,29 +187,25 @@ public final class Secret implements AutoCloseable {
      */
     public static Secret fromPlaintext(
             final byte[] plaintext) throws SecretException {
-        return fromPlaintext(getDefaultCipher(), generateSecretKeyForDefaultCipher(), plaintext);
+        return fromPlaintext(createDefaultCipher(), createKeyGeneratorForDefaultCipher(), plaintext);
     }
 
     /**
      * Creates a new instance of the {@code Secret} class from the specified
-     * plaintext value using the specified cipher and key to generate the
-     * ciphertext.
+     * plaintext value using the specified cipher and key generator to generate
+     * the ciphertext.
      *
      * <p>
      * The plaintext value is scrubbed by this method before returning. If the
      * plaintext must not be modified, call
-     * {@link #fromSharedPlaintext(Cipher, SecretKey, byte[])} instead.
-     * </p>
-     *
-     * <p>
-     * This method takes ownership of the specified key and will ensure it is
-     * destroyed when the secret is closed.
+     * {@link #fromSharedPlaintext(Cipher, KeyGenerator, byte[])} instead.
      * </p>
      *
      * @param cipher
      *            The cipher used to encrypt the plaintext.
-     * @param key
-     *            The key used to encrypt the plaintext.
+     * @param keyGenerator
+     *            The object used to generate the key used for encryption and
+     *            decryption.
      * @param plaintext
      *            The plaintext value to be kept secret.
      *
@@ -202,8 +216,9 @@ public final class Secret implements AutoCloseable {
      */
     public static Secret fromPlaintext(
             final Cipher cipher,
-            final SecretKey key,
+            final KeyGenerator keyGenerator,
             final byte[] plaintext) throws SecretException {
+        final SecretKey key = keyGenerator.generateKey();
         final byte[] ciphertext = encrypt(cipher, key, plaintext);
         final Secret secret = new Secret(cipher, key, ciphertext);
         scrub(plaintext);
@@ -230,28 +245,24 @@ public final class Secret implements AutoCloseable {
      */
     public static Secret fromSharedPlaintext(
             final byte[] plaintext) throws SecretException {
-        return fromSharedPlaintext(getDefaultCipher(), generateSecretKeyForDefaultCipher(), plaintext);
+        return fromSharedPlaintext(createDefaultCipher(), createKeyGeneratorForDefaultCipher(), plaintext);
     }
 
     /**
      * Creates a new instance of the {@code Secret} class from the specified
-     * shared plaintext value using the specified cipher and key to generate the
-     * ciphertext.
+     * shared plaintext value using the specified cipher and key generator to
+     * generate the ciphertext.
      *
      * <p>
      * The shared plaintext value is not modified by this method and should be
      * scrubbed by the caller as soon as possible if it is no longer needed.
      * </p>
      *
-     * <p>
-     * This method takes ownership of the specified key and will ensure it is
-     * destroyed when the secret is closed.
-     * </p>
-     *
      * @param cipher
      *            The cipher used to encrypt the plaintext.
-     * @param key
-     *            The key used to encrypt the plaintext.
+     * @param keyGenerator
+     *            The object used to generate the key used for encryption and
+     *            decryption.
      * @param plaintext
      *            The shared plaintext value to be kept secret.
      *
@@ -262,28 +273,11 @@ public final class Secret implements AutoCloseable {
      */
     public static Secret fromSharedPlaintext(
             final Cipher cipher,
-            final SecretKey key,
+            final KeyGenerator keyGenerator,
             final byte[] plaintext) throws SecretException {
+        final SecretKey key = keyGenerator.generateKey();
         final byte[] ciphertext = encrypt(cipher, key, plaintext);
         return new Secret(cipher, key, ciphertext);
-    }
-
-    private static SecretKey generateSecretKeyForDefaultCipher() throws SecretException {
-        try {
-            final KeyGenerator keyGenerator = KeyGenerator.getInstance(DEFAULT_CIPHER_ALGORITHM);
-            keyGenerator.init(DEFAULT_CIPHER_KEY_SIZE_IN_BITS);
-            return keyGenerator.generateKey();
-        } catch (final GeneralSecurityException e) {
-            throw new SecretException("failed to generate secret key for default cipher", e);
-        }
-    }
-
-    private static Cipher getDefaultCipher() throws SecretException {
-        try {
-            return Cipher.getInstance(DEFAULT_CIPHER_ALGORITHM);
-        } catch (final GeneralSecurityException e) {
-            throw new SecretException("failed to get default cipher", e);
-        }
     }
 
     @Override
